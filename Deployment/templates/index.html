@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Automated Soil Classifier</title>
+		<link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename="css/knockout-file-bindings.css") }}">
+		<style type="text/css">
+			.container {
+			max-width: 750px;
+			padding: 15px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="well" data-bind="fileDrag: fileData">
+				<div class="form-group row">
+					<div class="col-md-6">
+						<img style="height: 125px;" class="img-rounded  thumb" data-bind="attr: { src: fileData().dataURL }, visible: fileData().dataURL">
+						<div data-bind="ifnot: fileData().dataURL">
+							<label class="drag-label">Drag soil image here to get classification</label>
+						</div>
+					</div>
+					<div class="col-md-6">
+						<input type="file" data-bind="fileInput: fileData, customFileInput: {
+							buttonClass: 'btn btn-success',
+							fileNameClass: 'disabled form-control',
+							onClear: onClear,
+							onInvalidFileDrop: onInvalidFileDrop
+						}" accept="image/*">
+					</div>
+				</div>
+			</div>
+			<div id="displayResult">
+			
+			</div>
+		</div>
+
+		<script src='http://cdnjs.cloudflare.com/ajax/libs/knockout/3.1.0/knockout-min.js'></script>
+		<script src="{{ url_for('static', filename="js/knockout-file-bindings.js") }}"></script>
+		<script>
+			model_classes = ["Alluvial", "Black", "Clay", "Red"]
+			classes_wiki = ["https://en.wikipedia.org/wiki/Alluvium","https://en.wikipedia.org/wiki/Black_soil","https://en.wikipedia.org/wiki/Clay","https://en.wikipedia.org/wiki/Red_soil"]
+			displayResultDiv = document.getElementById("displayResult")
+			var viewModel = {};
+			viewModel.fileData = ko.observable({
+			dataURL: ko.observable(),
+			file: ko.observable(),
+			});
+			viewModel.onClear = function (fileData) {
+				if (confirm('Are you sure?')) {
+					fileData.clear && fileData.clear();
+					displayResultDiv.innerHTML = "";
+					displayResultDiv.classList.remove("well");
+				}
+			};
+			viewModel.fileData().file.subscribe(function(file){
+				if(file == null)
+				{
+					return;
+				}
+				formData = new FormData();
+				formData.append('image', file);
+				fetch('http://ec2-18-224-138-124.us-east-2.compute.amazonaws.com:4567/getResult',{
+					method:'POST',
+					body: formData
+				}).then((response) => response.json())
+				.then(function(response) 
+				{
+					if(response.status == 200)
+					{
+						displayResultDiv.classList.add("well");
+						text = document.createTextNode("This soil is of type ");
+						displayResultDiv.appendChild(text);
+						aNode = document.createElement('a');
+						aNodeText = document.createTextNode(model_classes[response.result]);
+						aNode.appendChild(aNodeText);
+						aNode.title = model_classes[response.result]
+						aNode.href = classes_wiki[response.result]
+						aNode.target = '_blank'
+						displayResultDiv.appendChild(aNode)
+					}
+				}).catch(error => console.log(error));
+			});
+			viewModel.onInvalidFileDrop = function(failedFiles) {
+				var fileNames = [];
+				for (var i = 0; i < failedFiles.length; i++) {
+					fileNames.push(failedFiles[i].name);
+				}
+				var message = 'Invalid file type: ' + fileNames.join(', ');
+				alert(message)
+				console.error(message);
+			};
+			ko.applyBindings(viewModel);
+		</script>
+	</body>
+</html>
